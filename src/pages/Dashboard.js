@@ -148,16 +148,6 @@ export default function Dashboard() {
                 Monitor and manage your Nepali/Sinhalese text translations
               </p>
             </div>
-            <div className="flex gap-3">
-              <Button variant="outline" onClick={fetchDashboardStats} disabled={isLoading}>
-                <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-                Refresh
-              </Button>
-              <Button>
-                <Upload className="h-4 w-4 mr-2" />
-                Upload Document
-              </Button>
-            </div>
           </div>
           <p className="text-sm text-slate-500 mt-2">
             Last updated: {mounted && lastUpdated ? lastUpdated.toLocaleTimeString('en-US', {
@@ -170,7 +160,7 @@ export default function Dashboard() {
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           <Card className="border-l-4 border-l-blue-500">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-slate-600">
@@ -186,21 +176,6 @@ export default function Dashboard() {
                 <TrendingUp className="h-3 w-3 mr-1" />
                 +12 from last week
               </p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-l-4 border-l-green-500">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-slate-600">
-                Success Rate
-              </CardTitle>
-              <CheckCircle className="h-5 w-5 text-green-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-slate-900 mb-2">
-                {stats.successRate}%
-              </div>
-              <Progress value={stats.successRate} className="h-2" />
             </CardContent>
           </Card>
 
