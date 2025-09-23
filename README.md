@@ -1,36 +1,51 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# Certificate AI Text Extraction
 
-## Getting Started
+A Next.js application that extracts text from certificate images and PDFs using Google Gemini AI and traditional OCR.
 
-First, run the development server:
+## Features
 
+- Upload certificate files (JPG, PNG, PDF)
+- Extract text using OCR (Optical Character Recognition)
+- Parse common certificate fields (name, roll number, marks, etc.)
+- Modern UI with TailwindCSS
+- Responsive design with TailwindCSS
+
+## Setup
+
+1. Install dependencies:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Set up Google Gemini AI API key:
+   - Get your API key from [Google AI Studio](https://makersuite.google.com/app/apikey)
+   - Create a `.env.local` file in the project root
+   - Add your API key: `GEMINI_API_KEY=your_api_key_here`
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+3. Run the development server:
+```bash
+npm run dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+4. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-## Learn More
+## Usage
 
-To learn more about Next.js, take a look at the following resources:
+1. Upload a certificate file (JPG, PNG, or PDF)
+2. Click "Extract Text" to process the document
+3. View the extracted data and raw text
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Technology Stack
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- Next.js 14
+- React 18
+- Google Gemini AI for advanced text extraction from images
+- Tesseract.js for OCR (fallback)
+- Formidable for file upload handling
+- pdf-parse for direct PDF text extraction
+- TailwindCSS for styling
 
-## Deploy on Vercel
+## API Endpoints
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `POST /api/gemini-ocr` - Processes uploaded files using Gemini AI and returns extracted text
+- `POST /api/ocr` - Legacy OCR endpoint using Tesseract.js
