@@ -1,24 +1,29 @@
 "use client"
 import { useState, useEffect } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
-import { 
-  FileText, 
-  Languages, 
-  Activity, 
-  TrendingUp, 
-  Clock, 
-  CheckCircle, 
+import {
+  FileText,
+  Languages,
+  Activity,
+  TrendingUp,
+  Clock,
+  CheckCircle,
   AlertCircle,
   Download,
   RefreshCw,
-  Upload
+  Upload,
+  Eye,
+  X,
+  FileImage,
+  FileType
 } from 'lucide-react'
 import Navbar from '../components/utils/navbar'
+import { supabaseBrowser } from '../lib/supabase'
 
 export default function Dashboard() {
   const [stats, setStats] = useState({
@@ -29,78 +34,142 @@ export default function Dashboard() {
     successRate: 0,
     avgProcessingTime: 0
   })
-
+  const [translations, setTranslations] = useState([])
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [lastUpdated, setLastUpdated] = useState(null)
   const [mounted, setMounted] = useState(false)
+  const [previewFile, setPreviewFile] = useState(null)
+  const [previewContent, setPreviewContent] = useState('')
+  const [previewLoading, setPreviewLoading] = useState(false)
 
   useEffect(() => {
     setMounted(true)
-    setLastUpdated(new Date())
-    fetchDashboardStats()
+    fetchDashboardData()
   }, [])
 
-  const fetchDashboardStats = async () => {
+  const fetchDashboardData = async () => {
     setIsLoading(true)
-    // Simulate API call
-    setTimeout(() => {
-      setStats({
-        totalTranslations: 247,
-        activeJobs: 3,
-        successRate: 94.8,
-        avgProcessingTime: 2.3,
-        recentDocuments: [
-          { 
-            id: 1, 
-            name: 'nepali_contract.pdf', 
-            status: 'completed', 
-            date: '2024-03-22',
-            language: 'Nepali',
-            size: '2.4 MB',
-            progress: 100
-          },
-          { 
-            id: 2, 
-            name: 'sinhala_manuscript.jpg', 
-            status: 'processing', 
-            date: '2024-03-22',
-            language: 'Sinhalese',
-            size: '1.8 MB',
-            progress: 68
-          },
-          { 
-            id: 3, 
-            name: 'nepali_letter.docx', 
-            status: 'completed', 
-            date: '2024-03-21',
-            language: 'Nepali',
-            size: '0.9 MB',
-            progress: 100
-          },
-          { 
-            id: 4, 
-            name: 'sinhala_book_page.png', 
-            status: 'failed', 
-            date: '2024-03-21',
-            language: 'Sinhalese',
-            size: '3.2 MB',
-            progress: 0
-          },
-          { 
-            id: 5, 
-            name: 'nepali_form.pdf', 
-            status: 'queued', 
-            date: '2024-03-22',
-            language: 'Nepali',
-            size: '1.1 MB',
-            progress: 0
-          }
-        ],
-        processingStatus: 'active'
-      })
+    setError(null)
+    try {
+      const { data: translationsData, error } = await supabaseBrowser()
+        .from('translations')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+
+      setTranslations(translationsData)
+
+      // Calculate stats from real data
+      const completedJobs = translationsData.filter(t => t.status === 'completed').length
+      const totalJobs = translationsData.length
+      const avgTime = translationsData
+        .filter(t => t.status === 'completed' && t.processing_time)
+        .reduce((acc, t) => acc + t.processing_time, 0) / (completedJobs || 1)
+
+      const newStats = {
+        totalTranslations: totalJobs,
+        activeJobs: translationsData.filter(t => t.status === 'processing').length,
+        recentDocuments: translationsData.slice(0, 5).map(t => ({
+          id: t.id,
+          name: t.file_name || 'Untitled Document',
+          status: t.status || 'completed',
+          date: new Date(t.created_at).toISOString().split('T')[0],
+          language: t.original_language || 'Unknown',
+          size: t.file_size ? `${(t.file_size / 1024).toFixed(1)} KB` : 'N/A',
+          progress: t.status === 'processing' ? (t.progress || 68) : 100,
+          filePath: t.file_path,
+          originalText: t.original_text,
+          translatedText: t.translated_text,
+          fileType: t.file_type || 'text'
+        })),
+        processingStatus: translationsData.some(t => t.status === 'processing') ? 'active' : 'idle',
+        avgProcessingTime: Number(avgTime.toFixed(1)) || 2.3,
+        successRate: totalJobs ? Math.round((completedJobs / totalJobs) * 100) : 0
+      }
+
+      setStats(newStats)
       setLastUpdated(new Date())
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error)
+      setError('Failed to load dashboard data. Please try again.')
+    } finally {
       setIsLoading(false)
-    }, 1000)
+    }
+  }
+
+  const handlePreview = async (doc) => {
+    setPreviewFile(doc)
+    setPreviewLoading(true)
+    setPreviewContent('')
+
+    try {
+      // If we have text content in database, use it
+      if (doc.originalText || doc.translatedText) {
+        setPreviewContent({
+          original: doc.translatedText || 'Translation not available',
+          translated: doc.originalText || 'No original text available'
+        })
+        setPreviewLoading(false)
+        return
+      }
+
+      // Otherwise, try to fetch from file
+      if (doc.filePath) {
+        const s = supabaseBrowser()
+        const { data, error } = await s
+          .storage
+          .from('SIH25')
+          .download(doc.filePath)
+
+        if (error) throw error
+
+        const text = await data.text()
+        setPreviewContent({
+          original: text.substring(0, 2000) + (text.length > 2000 ? '...' : ''),
+          translated: 'Translation not available'
+        })
+      } else {
+        setPreviewContent({
+          original: 'File content not available',
+          translated: 'Translation not available'
+        })
+      }
+    } catch (error) {
+      console.error('Error loading preview:', error)
+      setPreviewContent({
+        original: 'Error loading file content',
+        translated: 'Translation not available'
+      })
+    } finally {
+      setPreviewLoading(false)
+    }
+  }
+
+  const handleDownload = async (filePath) => {
+    if (!filePath) return
+    try {
+      const s = supabaseBrowser()
+      const { data, error } = await s
+        .storage
+        .from('SIH25')
+        .download(filePath)
+
+      if (error) throw error
+
+      const url = URL.createObjectURL(data)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filePath.split('/').pop()
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Error downloading file:', error)
+      setError('Failed to download file. Please try again.')
+    }
   }
 
   const getStatusIcon = (status) => {
@@ -132,10 +201,25 @@ export default function Dashboard() {
     )
   }
 
+  const getFileTypeIcon = (fileType) => {
+    if (fileType?.includes('image')) {
+      return <FileImage className="h-4 w-4" />
+    }
+    return <FileType className="h-4 w-4" />
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
+        <RefreshCw className="h-8 w-8 text-blue-500 animate-spin" />
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-        <Navbar></Navbar>
-      
+      <Navbar />
+
       <div className="container mx-auto px-4 py-8 max-w-7xl">
         {/* Header */}
         <div className="mb-8">
@@ -159,6 +243,16 @@ export default function Dashboard() {
           </p>
         </div>
 
+        {/* Error Alert */}
+        {error && (
+          <Alert className="mb-6 border-red-200 bg-red-50">
+            <AlertCircle className="h-4 w-4 text-red-600" />
+            <AlertDescription className="text-red-800">
+              {error}
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           <Card className="border-l-4 border-l-blue-500">
@@ -174,7 +268,7 @@ export default function Dashboard() {
               </div>
               <p className="text-xs text-slate-500 mt-1 flex items-center">
                 <TrendingUp className="h-3 w-3 mr-1" />
-                +12 from last week
+                {stats.successRate}% success rate
               </p>
             </CardContent>
           </Card>
@@ -219,7 +313,7 @@ export default function Dashboard() {
           <Alert className="mb-6 border-blue-200 bg-blue-50">
             <Activity className="h-4 w-4 text-blue-600" />
             <AlertDescription className="text-blue-800">
-              <strong>System Active:</strong> Currently processing {stats.activeJobs} documents. 
+              <strong>System Active:</strong> Currently processing {stats.activeJobs} documents.
               Processing times may be slightly longer than usual.
             </AlertDescription>
           </Alert>
@@ -234,7 +328,7 @@ export default function Dashboard() {
                 Recent Documents
               </CardTitle>
               <CardDescription>
-                Latest translation jobs and their current status
+                Latest translation jobs and their current status (click file name to preview)
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -245,7 +339,12 @@ export default function Dashboard() {
                       {getStatusIcon(doc.status)}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between mb-1">
-                          <p className="font-medium text-slate-900 truncate">{doc.name}</p>
+                          <button
+                            onClick={() => handlePreview(doc)}
+                            className="font-medium text-slate-900 hover:text-blue-600 cursor-pointer transition-colors truncate text-left"
+                          >
+                            {doc.name}
+                          </button>
                           {getStatusBadge(doc.status)}
                         </div>
                         <div className="flex items-center space-x-4 text-sm text-slate-500 mb-2">
@@ -264,8 +363,20 @@ export default function Dashboard() {
                         )}
                       </div>
                       <div className="flex space-x-2">
-                        {doc.status === 'completed' && (
-                          <Button variant="ghost" size="sm">
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          onClick={() => handlePreview(doc)}
+                          className="text-blue-600 hover:text-blue-700"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        {doc.status === 'completed' && doc.filePath && (
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => handleDownload(doc.filePath)}
+                          >
                             <Download className="h-4 w-4" />
                           </Button>
                         )}
@@ -329,6 +440,50 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* File Preview Modal */}
+      {previewFile && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-4xl max-h-[90vh] flex flex-col">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+              <div className="flex items-center space-x-3">
+                {getFileTypeIcon(previewFile.fileType)}
+                <div>
+                  <CardTitle className="text-lg">{previewFile.name}</CardTitle>
+                  <CardDescription>
+                    {previewFile.language} • {previewFile.size} • {previewFile.date}
+                  </CardDescription>
+                </div>
+              </div>
+              <div className="flex items-center space-x-2">
+                {getStatusBadge(previewFile.status)}
+                <Button variant="ghost" size="sm" onClick={() => setPreviewFile(null)}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="flex-1 overflow-hidden">
+              {previewLoading ? (
+                <div className="flex items-center justify-center h-64">
+                  <RefreshCw className="h-8 w-8 text-blue-500 animate-spin" />
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex items-center space-x-2">
+                    <Badge variant="outline">Translated Text</Badge>
+                    <span className="text-sm text-slate-500">(English)</span>
+                  </div>
+                  <div className="p-4 bg-green-50 rounded-lg h-96 overflow-y-auto">
+                    <pre className="text-sm text-slate-700 whitespace-pre-wrap font-sans">
+                      {typeof previewContent === 'object' ? previewContent.original : 'Translation not available'}
+                    </pre>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   )
 }

@@ -46,10 +46,16 @@ export default function Navbar() {
       href: "/translate",
       icon: Languages
     },
+    {
+      title: "Dashboard",
+      href: "/Dashboard",
+      icon: BarChart3
+    },
   ]
 
   const mobileMenuItems = [
     { title: "Translate", href: "/translate", icon: Languages },
+    { title: "Dashboard", href: "/Dashboard", icon: BarChart3 },
     { title: "History", href: "/history", icon: History },
     { title: "Settings", href: "/settings", icon: Settings },
     { title: "Help", href: "/help", icon: HelpCircle }

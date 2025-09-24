@@ -19,7 +19,7 @@
 //         setError('Please upload a JPG, PNG, or PDF file.')
 //         return
 //       }
-      
+
 //       setFile(selectedFile)
 //       setError('')
 //       setExtractedText('')
@@ -28,7 +28,7 @@
 
 //   const handleSubmit = async (e) => {
 //     e.preventDefault()
-    
+
 //     if (!file) {
 //       setError('Please select a file to upload.')
 //       return
@@ -83,13 +83,13 @@
 //           <h1 className="text-3xl font-bold text-center text-gray-800 mb-8">
 //             Nepali & Sinhalese OCR + English Translation
 //           </h1>
-          
+
 //           {/* Upload Form */}
 //           <div className="bg-white rounded-lg shadow-md p-6 mb-6">
 //             <h2 className="text-xl font-semibold text-gray-700 mb-4">
 //               Upload Image or PDF
 //             </h2>
-            
+
 //             <form onSubmit={handleSubmit} className="space-y-4">
 //               <div>
 //                 <label htmlFor="file" className="block text-sm font-medium text-gray-700 mb-2">
@@ -103,7 +103,7 @@
 //                   className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
 //                 />
 //               </div>
-              
+
 //               <button
 //                 type="submit"
 //                 disabled={!file || isProcessing}
@@ -170,19 +170,20 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Progress } from '@/components/ui/progress'
-import { 
-  Upload, 
-  FileText, 
-  ImageIcon, 
-  Download, 
-  AlertCircle, 
-  CheckCircle, 
+import {
+  Upload,
+  FileText,
+  ImageIcon,
+  Download,
+  AlertCircle,
+  CheckCircle,
   Loader2,
   Languages,
   FileImage,
   Copy,
   RefreshCw
 } from 'lucide-react'
+import { supabaseBrowser } from '../lib/supabase'
 
 export default function Home() {
   const [file, setFile] = useState(null)
@@ -201,13 +202,13 @@ export default function Home() {
         setError('Please upload a JPG, PNG, or PDF file.')
         return
       }
-      
+
       // Check file size (limit to 10MB)
       if (selectedFile.size > 10 * 1024 * 1024) {
         setError('File size must be less than 10MB.')
         return
       }
-      
+
       setFile(selectedFile)
       setError('')
       setExtractedText('')
@@ -232,7 +233,7 @@ export default function Home() {
     e.preventDefault()
     e.stopPropagation()
     setDragActive(false)
-    
+
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       handleFileChange(e.dataTransfer.files[0])
     }
@@ -240,7 +241,7 @@ export default function Home() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    
+
     if (!file) {
       setError('Please select a file to upload.')
       return
@@ -297,23 +298,62 @@ export default function Home() {
     }
   }
 
-  const downloadResults = () => {
-    if (extractedText) {
-      const blob = new Blob([extractedText], { type: 'text/plain' })
-      const url = URL.createObjectURL(blob)
+
+const downloadResults = async () => {
+  if (extractedText) {
+    try {
+      const safeFileName = `translation-${new Date()
+        .toISOString()
+        .replace(/[:.]/g, '-')}.txt`
+
+      const fileBlob = new Blob([extractedText], { type: 'text/plain' })
+
+      const s = supabaseBrowser()
+
+      // Upload to Supabase storage
+      const { data, error } = await s
+        .storage
+        .from('SIH25')
+        .upload(`translations/${safeFileName}`, fileBlob, {
+          cacheControl: '3600',
+          upsert: false
+        })
+
+      if (error) throw error
+
+      // Store metadata
+      const { error: dbError } = await s
+        .from('translations')
+        .insert({
+          file_name: safeFileName,
+          file_path: data.path,
+          file_size: fileBlob.size,
+          original_language: 'Nepali/Sinhalese',
+          created_at: new Date().toISOString()
+        })
+
+      if (dbError) throw dbError
+
+      // Local download
+      const url = URL.createObjectURL(fileBlob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `translation-${new Date().toISOString().slice(0, 10)}.txt`
+      a.download = safeFileName
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
+
+    } catch (error) {
+      console.error('Failed to save translation:', error)
+      setError('Failed to save translation. Please try again.')
     }
   }
+}
 
   const getFileIcon = () => {
     if (!file) return <Upload className="h-12 w-12 text-muted-foreground" />
-    
+
     if (file.type.startsWith('image/')) {
       return <FileImage className="h-12 w-12 text-blue-500" />
     } else if (file.type === 'application/pdf') {
@@ -361,7 +401,7 @@ export default function Home() {
             Extract and translate text from Nepali and Sinhalese documents using advanced AI technology
           </p>
         </div>
-        
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Upload Section */}
           <div className="space-y-6">
@@ -378,11 +418,10 @@ export default function Home() {
               <CardContent className="space-y-4">
                 {/* Drag and Drop Area */}
                 <div
-                  className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-                    dragActive 
-                      ? 'border-primary bg-primary/5' 
+                  className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${dragActive
+                      ? 'border-primary bg-primary/5'
                       : 'border-muted-foreground/25 hover:border-primary/50'
-                  }`}
+                    }`}
                   onDragEnter={handleDrag}
                   onDragLeave={handleDrag}
                   onDragOver={handleDrag}
@@ -390,7 +429,7 @@ export default function Home() {
                 >
                   <div className="flex flex-col items-center gap-4">
                     {getFileIcon()}
-                    
+
                     {file ? (
                       <div className="text-center">
                         <p className="font-medium text-slate-900">{file.name}</p>
@@ -513,9 +552,9 @@ export default function Home() {
                       </CardDescription>
                     </div>
                     <div className="flex gap-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={copyToClipboard}
                         className={copySuccess ? "bg-green-50 border-green-200" : ""}
                       >
@@ -543,9 +582,9 @@ export default function Home() {
                         Completed
                       </Badge>
                     </div>
-                    
+
                     <Separator />
-                    
+
                     <div className="bg-slate-50 rounded-lg p-4 max-h-96 overflow-y-auto">
                       <pre className="text-sm text-slate-700 whitespace-pre-wrap font-mono leading-relaxed">
                         {lines.map((line, index) => (
